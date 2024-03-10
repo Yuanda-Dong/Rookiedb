@@ -1,10 +1,16 @@
 package edu.berkeley.cs186.database.query.expr;
 
-import edu.berkeley.cs186.database.databox.*;
+import java.util.Random;
+
+import edu.berkeley.cs186.database.databox.DataBox;
+import edu.berkeley.cs186.database.databox.FloatDataBox;
+import edu.berkeley.cs186.database.databox.IntDataBox;
+import edu.berkeley.cs186.database.databox.LongDataBox;
+import edu.berkeley.cs186.database.databox.StringDataBox;
+import edu.berkeley.cs186.database.databox.Type;
+import edu.berkeley.cs186.database.databox.TypeId;
 import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.Schema;
-
-import java.util.Random;
 
 abstract class AggregateFunction extends Expression {
     protected Type inputType;

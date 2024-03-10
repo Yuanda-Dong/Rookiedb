@@ -144,4 +144,20 @@ public abstract class DataBox implements Comparable<DataBox> {
         if (o instanceof byte[]) return new ByteArrayDataBox((byte[]) o, ((byte[]) o).length);
         throw new IllegalArgumentException("Object was not a supported data type");
     }
+
+    public boolean gt(DataBox that) {
+        return this.compareTo(that) > 0;
+    }
+
+    public boolean ge(DataBox that) {
+        return this.compareTo(that) > 0 || this.compareTo(that) == 0;
+    }
+
+    public boolean lt(DataBox that) {
+        return this.compareTo(that) < 0;
+    }
+
+    public boolean le(DataBox that) {
+        return this.compareTo(that) < 0 || this.compareTo(that) == 0;
+    }
 }

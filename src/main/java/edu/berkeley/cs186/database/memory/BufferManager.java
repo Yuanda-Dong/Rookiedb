@@ -403,7 +403,7 @@ public class BufferManager implements AutoCloseable {
             if (!this.diskSpaceManager.pageAllocated(pageNum)) {
                 throw new PageException("page " + pageNum + " not allocated");
             }
-            if (this.pageToFrame.containsKey(pageNum)) {
+            if (this.pageToFrame.containsKey(pageNum)) { // the requested pageNum is already in loaded in the buffer pool
                 newFrame = this.frames[this.pageToFrame.get(pageNum)];
                 newFrame.pin();
                 return newFrame;

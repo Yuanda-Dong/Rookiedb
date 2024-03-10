@@ -17,13 +17,12 @@ public class BNLJOperator extends JoinOperator {
     protected int numBuffers;
 
     public BNLJOperator(QueryOperator leftSource,
-                        QueryOperator rightSource,
-                        String leftColumnName,
-                        String rightColumnName,
-                        TransactionContext transaction) {
+            QueryOperator rightSource,
+            String leftColumnName,
+            String rightColumnName,
+            TransactionContext transaction) {
         super(leftSource, materialize(rightSource, transaction),
-                leftColumnName, rightColumnName, transaction, JoinType.BNLJ
-        );
+                leftColumnName, rightColumnName, transaction, JoinType.BNLJ);
         this.numBuffers = transaction.getWorkMemSize();
         this.stats = this.estimateStats();
     }
@@ -35,12 +34,12 @@ public class BNLJOperator extends JoinOperator {
 
     @Override
     public int estimateIOCost() {
-        //This method implements the IO cost estimation of the Block Nested Loop Join
+        // This method implements the IO cost estimation of the Block Nested Loop Join
         int usableBuffers = numBuffers - 2;
         int numLeftPages = getLeftSource().estimateStats().getNumPages();
         int numRightPages = getRightSource().estimateIOCost();
         return ((int) Math.ceil((double) numLeftPages / (double) usableBuffers)) * numRightPages +
-               getLeftSource().estimateIOCost();
+                getLeftSource().estimateIOCost();
     }
 
     /**
@@ -48,7 +47,7 @@ public class BNLJOperator extends JoinOperator {
      * Look over the implementation in SNLJOperator if you want to get a feel
      * for the fetchNextRecord() logic.
      */
-    private class BNLJIterator implements Iterator<Record>{
+    private class BNLJIterator implements Iterator<Record> {
         // Iterator over all the records of the left source
         private Iterator<Record> leftSourceIterator;
         // Iterator over all the records of the right source
@@ -87,7 +86,12 @@ public class BNLJOperator extends JoinOperator {
          * Make sure you pass in the correct schema to this method.
          */
         private void fetchNextLeftBlock() {
-            // TODO(proj3_part1): implement
+            if (leftSourceIterator.hasNext()) {
+                leftBlockIterator = QueryOperator.getBlockIterator(leftSourceIterator, getLeftSource().getSchema(),
+                        numBuffers - 2);
+                leftBlockIterator.markNext();
+                leftRecord = leftBlockIterator.next();
+            }
         }
 
         /**
@@ -102,7 +106,10 @@ public class BNLJOperator extends JoinOperator {
          * Make sure you pass in the correct schema to this method.
          */
         private void fetchNextRightPage() {
-            // TODO(proj3_part1): implement
+            if (rightSourceIterator.hasNext()) {
+                rightPageIterator = QueryOperator.getBlockIterator(rightSourceIterator, getRightSource().getSchema(), 1);
+                rightPageIterator.markNext();
+            }
         }
 
         /**
@@ -114,17 +121,52 @@ public class BNLJOperator extends JoinOperator {
          * of JoinOperator).
          */
         private Record fetchNextRecord() {
-            // TODO(proj3_part1): implement
-            return null;
+            while (true) {
+                if (rightPageIterator.hasNext()) {
+                    // The right page iterator has a value to yield
+                    Record righRecord = rightPageIterator.next();
+                    if (compare(leftRecord, righRecord) == 0) {
+                        return leftRecord.concat(righRecord);
+                    }
+                } else if (!rightPageIterator.hasNext() && leftBlockIterator.hasNext()) {
+                    // The right page iterator doesn't have a value to yield but the left block
+                    // iterator does
+                    leftRecord = leftBlockIterator.next();
+                    rightPageIterator.reset();
+                    rightPageIterator.markNext();
+                } else if (!rightPageIterator.hasNext() && !leftBlockIterator.hasNext()
+                        && rightSourceIterator.hasNext()) {
+                    // Neither the right page nor left block iterators have values to yield,
+                    // but there's more right pages
+                    fetchNextRightPage();
+                    leftBlockIterator.reset();
+                    leftBlockIterator.markNext();
+                    leftRecord = leftBlockIterator.next();
+                } else if (!rightPageIterator.hasNext() && !leftBlockIterator.hasNext()
+                        && !rightSourceIterator.hasNext() && leftSourceIterator.hasNext()) {
+                    // Neither right page nor left block iterators have values nor are there
+                    // more right pages, but there are still left blocks
+                    fetchNextLeftBlock();
+                    rightSourceIterator.reset();
+                    rightSourceIterator.markNext();
+                    fetchNextRightPage();
+                    leftBlockIterator.reset();
+                    leftBlockIterator.markNext();
+                    leftRecord = leftBlockIterator.next();
+                } else {
+                    return null;
+                }
+            }
         }
 
         /**
          * @return true if this iterator has another record to yield, otherwise
-         * false
+         *         false
          */
         @Override
         public boolean hasNext() {
-            if (this.nextRecord == null) this.nextRecord = fetchNextRecord();
+            if (this.nextRecord == null)
+                this.nextRecord = fetchNextRecord();
             return this.nextRecord != null;
         }
 
@@ -134,7 +176,8 @@ public class BNLJOperator extends JoinOperator {
          */
         @Override
         public Record next() {
-            if (!this.hasNext()) throw new NoSuchElementException();
+            if (!this.hasNext())
+                throw new NoSuchElementException();
             Record nextRecord = this.nextRecord;
             this.nextRecord = null;
             return nextRecord;
