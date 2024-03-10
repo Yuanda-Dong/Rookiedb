@@ -45,11 +45,11 @@ public class TestBPlusTree {
 
     // 3 seconds max per method tested.
     @Rule
-    public TestRule globalTimeout = new DisableOnDebug(Timeout.millis((long) (
-                3000 * TimeoutScaling.factor)));
+    public TestRule globalTimeout = new DisableOnDebug(Timeout.millis((long) (3000 * TimeoutScaling.factor)));
+
 
     @Before
-    public void setup()  {
+    public void setup() {
         DiskSpaceManager diskSpaceManager = new MemoryDiskSpaceManager();
         diskSpaceManager.allocPart(0);
         this.bufferManager = new BufferManager(diskSpaceManager, new DummyRecoveryManager(), 1024,
@@ -69,7 +69,7 @@ public class TestBPlusTree {
     // Helpers /////////////////////////////////////////////////////////////////
     private void setBPlusTreeMetadata(Type keySchema, int order) {
         this.metadata = new BPlusTreeMetadata("test", "col", keySchema, order,
-                                              0, DiskSpaceManager.INVALID_PAGE_NUM, -1);
+                0, DiskSpaceManager.INVALID_PAGE_NUM, -1);
     }
 
     private BPlusTree getBPlusTree(Type keySchema, int order) {
@@ -77,12 +77,16 @@ public class TestBPlusTree {
         return new BPlusTree(bufferManager, metadata, treeContext);
     }
 
-    // the 0th item in maxIOsOverride specifies how many I/Os constructing the iterator may take
-    // the i+1th item in maxIOsOverride specifies how many I/Os the ith call to next() may take
-    // if there are more items in the iterator than maxIOsOverride, then we default to
-    // MAX_IO_PER_ITER_CREATE/MAX_IO_PER_NEXT once we run out of items in maxIOsOverride
+    // the 0th item in maxIOsOverride specifies how many I/Os constructing the
+    // iterator may take
+    // the i+1th item in maxIOsOverride specifies how many I/Os the ith call to
+    // next() may take
+    // if there are more items in the iterator than maxIOsOverride, then we default
+    // to
+    // MAX_IO_PER_ITER_CREATE/MAX_IO_PER_NEXT once we run out of items in
+    // maxIOsOverride
     private <T> List<T> indexIteratorToList(Supplier<Iterator<T>> iteratorSupplier,
-                                            Iterator<Integer> maxIOsOverride) {
+            Iterator<Integer> maxIOsOverride) {
         bufferManager.evictAll();
 
         long initialIOs = bufferManager.getNumIOs();
@@ -92,8 +96,8 @@ public class TestBPlusTree {
         long newIOs = bufferManager.getNumIOs();
         long maxIOs = maxIOsOverride.hasNext() ? maxIOsOverride.next() : MAX_IO_PER_ITER_CREATE;
         assertFalse("too many I/Os used constructing iterator (" + (newIOs - prevIOs) + " > " + maxIOs +
-                    ") - are you materializing more than you need?",
-                    newIOs - prevIOs > maxIOs);
+                ") - are you materializing more than you need?",
+                newIOs - prevIOs > maxIOs);
 
         List<T> xs = new ArrayList<>();
         while (iter.hasNext()) {
@@ -102,15 +106,15 @@ public class TestBPlusTree {
             newIOs = bufferManager.getNumIOs();
             maxIOs = maxIOsOverride.hasNext() ? maxIOsOverride.next() : MAX_IO_PER_NEXT;
             assertFalse("too many I/Os used per next() call (" + (newIOs - prevIOs) + " > " + maxIOs +
-                        ") - are you materializing more than you need?",
-                        newIOs - prevIOs > maxIOs);
+                    ") - are you materializing more than you need?",
+                    newIOs - prevIOs > maxIOs);
         }
 
         long finalIOs = bufferManager.getNumIOs();
         maxIOs = xs.size() / (2 * metadata.getOrder());
         assertTrue("too few I/Os used overall (" + (finalIOs - initialIOs) + " < " + maxIOs +
-                   ") - are you materializing before the iterator is even constructed?",
-                   (finalIOs - initialIOs) >= maxIOs);
+                ") - are you materializing before the iterator is even constructed?",
+                (finalIOs - initialIOs) >= maxIOs);
         return xs;
     }
 
@@ -119,7 +123,61 @@ public class TestBPlusTree {
     }
 
     // Tests ///////////////////////////////////////////////////////////////////
+    @Test
+    @Category(PublicTests.class)
+    public void randomTest(){
+        BPlusTree tree = getBPlusTree(Type.intType(), 4);
+        assert(tree.root instanceof LeafNode);
 
+    }
+
+    @Test
+    @Category(PublicTests.class)
+    public void testScanAll() {
+
+        BPlusTree tree = getBPlusTree(Type.intType(), 4);
+        RecordId r1 = new RecordId(2, (short) 2);
+        RecordId r2 = new RecordId(5, (short) 5);
+        RecordId r3 = new RecordId(4, (short) 4);
+        RecordId r4 = new RecordId(1, (short) 1);
+        RecordId r5 = new RecordId(3, (short) 3);
+        tree.put(new IntDataBox(2), r1);
+        tree.put(new IntDataBox(5), r2);
+        tree.put(new IntDataBox(4), r3);
+        tree.put(new IntDataBox(1), r4);
+        tree.put(new IntDataBox(3), r5);
+
+        Iterator<RecordId> iter = tree.scanAll();
+        assertEquals(iter.next(), r4);
+        assertEquals(iter.next(), r1);
+        assertEquals(iter.next(), r5);
+        assertEquals(iter.next(), r3);
+        assertEquals(iter.next(), r2);
+
+    }
+
+
+    @Test
+    @Category(PublicTests.class)
+    public void testScanGreaterEqual() {
+        BPlusTree tree = getBPlusTree(Type.intType(), 4);
+        RecordId r1 = new RecordId(2, (short) 2);
+        RecordId r2 = new RecordId(5, (short) 5);
+        RecordId r3 = new RecordId(4, (short) 4);
+        RecordId r4 = new RecordId(1, (short) 1);
+        RecordId r5 = new RecordId(3, (short) 3);
+        tree.put(new IntDataBox(2), r1);
+        tree.put(new IntDataBox(5), r2);
+        tree.put(new IntDataBox(4), r3);
+        tree.put(new IntDataBox(1), r4);
+        tree.put(new IntDataBox(3), r5);
+
+        Iterator<RecordId> iter = tree.scanGreaterEqual(new IntDataBox(3));
+        assertEquals(iter.next(), r5);
+        assertEquals(iter.next(), r3);
+        // assertEquals(iter.next(), r2);
+
+    }
     @Test
     @Category(PublicTests.class)
     public void testSimpleBulkLoad() {
@@ -136,8 +194,8 @@ public class TestBPlusTree {
         }
 
         tree.bulkLoad(data.iterator(), fillFactor);
-        //      (    4        7         10        _   )
-        //       /       |         |         \
+        // ( 4 7 10 _ )
+        // / | | \
         // (1 2 3 _) (4 5 6 _) (7 8 9 _) (10 11 _ _)
         String leaf0 = "((1 (1 1)) (2 (2 2)) (3 (3 3)))";
         String leaf1 = "((4 (4 4)) (5 (5 5)) (6 (6 6)))";
@@ -164,24 +222,24 @@ public class TestBPlusTree {
         tree.put(new IntDataBox(9), new RecordId(9, (short) 9));
         assertEquals("((4 (4 4)) (9 (9 9)))", tree.toSexp());
 
-        //   (6)
-        //  /   \
+        // (6)
+        // / \
         // (4) (6 9)
         tree.put(new IntDataBox(6), new RecordId(6, (short) 6));
         String l = "((4 (4 4)))";
         String r = "((6 (6 6)) (9 (9 9)))";
         assertEquals(String.format("(%s 6 %s)", l, r), tree.toSexp());
 
-        //     (6)
-        //    /   \
+        // (6)
+        // / \
         // (2 4) (6 9)
         tree.put(new IntDataBox(2), new RecordId(2, (short) 2));
         l = "((2 (2 2)) (4 (4 4)))";
         r = "((6 (6 6)) (9 (9 9)))";
         assertEquals(String.format("(%s 6 %s)", l, r), tree.toSexp());
 
-        //      (6 7)
-        //     /  |  \
+        // (6 7)
+        // / | \
         // (2 4) (6) (7 9)
         tree.put(new IntDataBox(7), new RecordId(7, (short) 7));
         l = "((2 (2 2)) (4 (4 4)))";
@@ -189,10 +247,10 @@ public class TestBPlusTree {
         r = "((7 (7 7)) (9 (9 9)))";
         assertEquals(String.format("(%s 6 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //         (7)
-        //        /   \
-        //     (6)     (8)
-        //    /   \   /   \
+        // (7)
+        // / \
+        // (6) (8)
+        // / \ / \
         // (2 4) (6) (7) (8 9)
         tree.put(new IntDataBox(8), new RecordId(8, (short) 8));
         String ll = "((2 (2 2)) (4 (4 4)))";
@@ -203,10 +261,10 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 7 %s)", l, r), tree.toSexp());
 
-        //            (7)
-        //           /   \
-        //     (3 6)       (8)
-        //   /   |   \    /   \
+        // (7)
+        // / \
+        // (3 6) (8)
+        // / | \ / \
         // (2) (3 4) (6) (7) (8 9)
         tree.put(new IntDataBox(3), new RecordId(3, (short) 3));
         ll = "((2 (2 2)))";
@@ -218,10 +276,10 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 7 %s)", l, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //   (3)      (6)       (8)
-        //  /   \    /   \    /   \
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
         // (2) (3) (4 5) (6) (7) (8 9)
         tree.put(new IntDataBox(5), new RecordId(5, (short) 5));
         ll = "((2 (2 2)))";
@@ -235,10 +293,10 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
         // (1 2) (3) (4 5) (6) (7) (8 9)
         tree.put(new IntDataBox(1), new RecordId(1, (short) 1));
         ll = "((1 (1 1)) (2 (2 2)))";
@@ -252,11 +310,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (  2) (3) (4 5) (6) (7) (8 9)
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( 2) (3) (4 5) (6) (7) (8 9)
         tree.remove(new IntDataBox(1));
         ll = "((2 (2 2)))";
         lr = "((3 (3 3)))";
@@ -269,11 +327,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (  2) (3) (4 5) (6) (7) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( 2) (3) (4 5) (6) (7) (8 )
         tree.remove(new IntDataBox(9));
         ll = "((2 (2 2)))";
         lr = "((3 (3 3)))";
@@ -286,11 +344,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (  2) (3) (4 5) ( ) (7) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( 2) (3) (4 5) ( ) (7) (8 )
         tree.remove(new IntDataBox(6));
         ll = "((2 (2 2)))";
         lr = "((3 (3 3)))";
@@ -303,11 +361,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (  2) (3) (  5) ( ) (7) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( 2) (3) ( 5) ( ) (7) (8 )
         tree.remove(new IntDataBox(4));
         ll = "((2 (2 2)))";
         lr = "((3 (3 3)))";
@@ -320,11 +378,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (   ) (3) (  5) ( ) (7) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( ) (3) ( 5) ( ) (7) (8 )
         tree.remove(new IntDataBox(2));
         ll = "()";
         lr = "((3 (3 3)))";
@@ -337,11 +395,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (   ) (3) (   ) ( ) (7) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( ) (3) ( ) ( ) (7) (8 )
         tree.remove(new IntDataBox(5));
         ll = "()";
         lr = "((3 (3 3)))";
@@ -354,11 +412,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (   ) (3) (   ) ( ) ( ) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( ) (3) ( ) ( ) ( ) (8 )
         tree.remove(new IntDataBox(7));
         ll = "()";
         lr = "((3 (3 3)))";
@@ -371,11 +429,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (   ) ( ) (   ) ( ) ( ) (8  )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( ) ( ) ( ) ( ) ( ) (8 )
         tree.remove(new IntDataBox(3));
         ll = "()";
         lr = "()";
@@ -388,11 +446,11 @@ public class TestBPlusTree {
         r = String.format("(%s 8 %s)", rl, rr);
         assertEquals(String.format("(%s 4 %s 7 %s)", l, m, r), tree.toSexp());
 
-        //            (4 7)
-        //           /  |  \
-        //    (3)      (6)       (8)
-        //   /   \    /   \    /   \
-        // (   ) ( ) (   ) ( ) ( ) (   )
+        // (4 7)
+        // / | \
+        // (3) (6) (8)
+        // / \ / \ / \
+        // ( ) ( ) ( ) ( ) ( ) ( )
         tree.remove(new IntDataBox(8));
         ll = "()";
         lr = "()";
